@@ -177,11 +177,25 @@ public class MainController {
     }
 
     @PostMapping("/uploadMark")
-    public String markUpload(@RequestBody Mark mark,@RequestHeader("Authorization") String token) throws ExecutionException, InterruptedException {
-        String username = jwtTokenUtil.extractUsername(token);
+    public Double markUpload(@RequestBody Mark mark,@RequestHeader("Authorization") String token) throws ExecutionException, InterruptedException {
+        String username = jwtTokenUtil.extractUsername(token.split(" ")[1]);
         User user = userService.getUserDetails(username);
         mark.setId(0);
         mark.setUser_id(user.getId());
-        return mainService.uploadMark(mark);
+        String result =  mainService.uploadMark(mark);
+        Double averageMark = 0.0;
+        if(result.equals("A new row has been inserted.")){
+            List<Mark> marks = mainService.getMarksByPost(mark.getPost_id());
+            if(!marks.isEmpty()){
+                Double sum = 0.0;
+                ListIterator<Mark> iterator = marks.listIterator();
+                while(iterator.hasNext()){
+                    sum += iterator.next().getMark();
+                }
+                averageMark = sum / (marks.size());
+            }
+        }
+
+        return averageMark;
     }
 }
