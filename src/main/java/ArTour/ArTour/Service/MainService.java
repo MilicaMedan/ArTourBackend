@@ -1,62 +1,138 @@
 package ArTour.ArTour.Service;
 
-import ArTour.ArTour.Model.Post;
+import ArTour.ArTour.Model.Mark;
+import ArTour.ArTour.Model.MultimediaFile;
+import ArTour.ArTour.Model.User;
+import ArTour.ArTour.Response.MultimediaFileResponse;
 import com.google.api.core.ApiFuture;
-import com.google.cloud.Timestamp;
 import com.google.cloud.firestore.*;
 import com.google.firebase.cloud.FirestoreClient;
+import org.apache.tomcat.jni.Local;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 @Service
 public class MainService {
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-    public String savePostDetails(Post post) throws ExecutionException, InterruptedException {
-        Firestore dbFirestore = FirestoreClient.getFirestore();
-        ApiFuture<WriteResult> collectionApiFuture = dbFirestore.collection("posts").document(post.getName()).set(post);
-        return collectionApiFuture.get().getUpdateTime().toString();
+    public String savePostDetails(MultimediaFile mFile) throws ExecutionException, InterruptedException {
+
+        String sqlInsertPost = "INSERT INTO post (id, name, datetime, user_id) VALUES (?, ?, ?, ?)";
+
+        int result = jdbcTemplate.update(sqlInsertPost, mFile.getId(), mFile.getName(), mFile.getDatetime(), mFile.getUser_id());
+
+
+        if (result > 0) {
+            return "A new row has been inserted.";
+        }
+        return "failed";
+
     }
 
-    public List<Post> getPosts() throws ExecutionException, InterruptedException {
-        //Class<Post> parameterizedType = Post.class;
-        Firestore dbFirestore = FirestoreClient.getFirestore();
-        CollectionReference collectionReference = dbFirestore.collection("posts");
-        ApiFuture<QuerySnapshot> querySnapshotApiFuture = collectionReference.get();
+    public List<MultimediaFileResponse> getFiles(User user) throws ExecutionException, InterruptedException {
+
         try {
-            List<QueryDocumentSnapshot> queryDocumentSnapshots = querySnapshotApiFuture.get().getDocuments();
+            String sql = "SELECT * FROM post WHERE user_id != ?";
 
-            var snapshots = queryDocumentSnapshots.iterator();
-                  /*  .map(queryDocumentSnapshot -> queryDocumentSnapshot.toObject(parameterizedType))
-                    .collect(Collectors.toList());*/
-            List<Post> posts = new ArrayList<Post>();
-            while(snapshots.hasNext()){
-                QueryDocumentSnapshot snapshot = snapshots.next();
-                Post post = new Post();
-                post.setUsername(snapshot.getData().get("username").toString());
-                post.setName(snapshot.getData().get("name").toString());
-                Timestamp pom = (Timestamp) snapshot.getData().get("datetime");
-                post.setDatetime(pom);
-
-                posts.add(post);
-
+            List<MultimediaFileResponse> files = new ArrayList<>();
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, user.getId());
+            if(!rows.isEmpty()){
+                for (Map row : rows) {
+                    MultimediaFileResponse obj = new MultimediaFileResponse();
+                    obj.setId((Long) row.get("id"));
+                    obj.setName((String) row.get("name"));
+                    obj.setDatetime((LocalDateTime) row.get("datetime"));
+                    obj.setUser_id((Long) row.get("user_id"));
+                    files.add(obj);
+                }
             }
-            return posts;
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException("Exception occurred while retrieving all document for posts");
+
+            return files;
+
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Exception occurred while retrieving all document for files");
         }
-        /*Iterable<DocumentReference> dr = dbFirestore.collection("post").listDocuments();
-        ApiFuture<DocumentSnapshot> future = dr.get();
-        DocumentSnapshot ds = future.get();
-        User user = null;
-        if(ds.exists()){
-            user = ds.toObject(User.class);
-            return user;
-        }else {
-            return null;
-        }*/
+    }
+
+    public List<MultimediaFileResponse> getMyFiles(User user) throws ExecutionException, InterruptedException {
+
+        try {
+            String sql = "SELECT * FROM post WHERE user_id = ?";
+
+            List<MultimediaFileResponse> files = new ArrayList<>();
+
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, user.getId());
+
+            if(!rows.isEmpty()){
+                for (Map row : rows) {
+                    MultimediaFileResponse obj = new MultimediaFileResponse();
+                    obj.setId((Long) row.get("id"));
+                    obj.setName((String) row.get("name"));
+                    obj.setDatetime((LocalDateTime) row.get("datetime"));
+                    obj.setUser_id((Long) row.get("user_id"));
+                    files.add(obj);
+                }
+            }
+            return files;
+
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+            throw new RuntimeException("Exception occurred while retrieving all document for files");
+        }
+
+    }
+
+    public String uploadMark(Mark mark){
+        String sqlInsertPost = "INSERT INTO mark (id, mark, user_id, post_id) VALUES (?, ?, ?, ?)";
+
+        int result = jdbcTemplate.update(sqlInsertPost, mark.getId(), mark.getMark(),  mark.getUser_id(), mark.getPost_id());
+
+
+        if (result > 0) {
+            return "A new row has been inserted.";
+        }
+        return "failed";
+    }
+
+    public List<Mark> getMarksByPost(Integer post_id){
+        try {
+            String sql = "SELECT * FROM mark where post_id = ?";
+
+            List<Mark> files = new ArrayList<>();
+
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql,post_id);
+
+            for (Map row : rows) {
+                Mark obj = new Mark();
+                Integer id = ((Long) row.get("id")).intValue();
+                Integer userId = ((Long) row.get("user_id")).intValue();
+                Integer postId = ((Long) row.get("post_id")).intValue();
+                Double mark =  ((BigDecimal) row.get("mark")).doubleValue();
+                obj.setId(id);
+                obj.setMark(mark);
+                obj.setUser_id(userId);
+                obj.setPost_id(postId);
+                files.add(obj);
+            }
+
+            return files;
+
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+            throw new RuntimeException("Exception occurred while retrieving all document for files");
+        }
     }
 
 }
